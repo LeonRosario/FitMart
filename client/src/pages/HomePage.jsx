@@ -7,7 +7,7 @@ import { signOut } from "firebase/auth";
 import { auth } from "../auth/firebase";
 import CartDrawer from "../components/CartDrawer";
 import { fmt } from "../utils/formatters";
-import { getAuthHeaders } from "../utils/getAuthHeaders";
+import { apiClient } from "../lib/apiClient";
 import FitnessChatBot from "../components/FitnessChatBot";
 import ErrorBoundary from "../components/ErrorBoundary";
 import WelcomeBanner from "../components/WelcomeBanner";
@@ -22,7 +22,7 @@ import CategoryPillsSkeleton from "../components/CategoryPillsSkeleton";
 
 
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 
 const CATEGORIES = [
   { name: "All", value: "all" },
@@ -242,10 +242,7 @@ export default function HomePage() {
     if (!user || !products.length) return;
     (async () => {
       try {
-        const headers = await getAuthHeaders();
-        const res = await fetch(`${API}/api/cart/${user.uid}`, { headers, credentials: "include" });
-        if (!res.ok) return;
-        const cartDoc = await res.json();
+        const cartDoc = await apiClient.get(`/api/cart/${user.uid}`);
         setCart(mapCart(cartDoc, products));
       } catch (err) {
         console.error("Error loading cart:", err);
@@ -264,64 +261,37 @@ export default function HomePage() {
 
   const addToCart = async (product) => {
     if (!user) return;
-    try {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`${API}/api/cart/${user.uid}/add`, {
-        method: "POST", headers, credentials: "include",
-        body: JSON.stringify({ productId: product.productId || product.id, quantity: 1 }),
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to add to cart");
+      try {
+        const cartDoc = await apiClient.post(`/api/cart/${user.uid}/add`, { productId: product.productId || product.id, quantity: 1 });
+        setCart(mapCart(cartDoc, products));
+      } catch (err) {
+        console.error("Add to cart failed:", err);
+        alert(err.message);
       }
-      const cartDoc = await res.json();
-      setCart(mapCart(cartDoc, products));
-    } catch (err) { 
-      console.error("Add to cart failed:", err); 
-      alert(err.message);
-    }
   };
 
   const removeFromCart = async (id) => {
     if (!user) return;
-    try {
-      const existing = cart.find(i => i.id === id);
-      const headers = await getAuthHeaders();
-      const res = await fetch(`${API}/api/cart/${user.uid}/remove`, {
-        method: "POST", headers, credentials: "include",
-        body: JSON.stringify({ productId: id, quantity: existing?.qty || 1 }),
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to remove");
+      try {
+        const existing = cart.find(i => i.id === id);
+        const cartDoc = await apiClient.post(`/api/cart/${user.uid}/remove`, { productId: id, quantity: existing?.qty || 1 });
+        setCart(mapCart(cartDoc, products));
+      } catch (err) {
+        console.error("Remove from cart failed:", err);
+        alert(err.message);
       }
-      const cartDoc = await res.json();
-      setCart(mapCart(cartDoc, products));
-    } catch (err) { 
-      console.error("Remove from cart failed:", err); 
-      alert(err.message);
-    }
   };
 
   const updateQty = async (id, delta) => {
     if (!user) return;
-    try {
-      const url = delta > 0 ? "add" : "remove";
-      const headers = await getAuthHeaders();
-      const res = await fetch(`${API}/api/cart/${user.uid}/${url}`, {
-        method: "POST", headers, credentials: "include",
-        body: JSON.stringify({ productId: id, quantity: Math.abs(delta) }),
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to update qty");
+      try {
+        const url = delta > 0 ? "add" : "remove";
+        const cartDoc = await apiClient.post(`/api/cart/${user.uid}/${url}`, { productId: id, quantity: Math.abs(delta) });
+        setCart(mapCart(cartDoc, products));
+      } catch (err) {
+        console.error("Update qty failed:", err);
+        alert(err.message);
       }
-      const cartDoc = await res.json();
-      setCart(mapCart(cartDoc, products));
-    } catch (err) { 
-      console.error("Update qty failed:", err); 
-      alert(err.message);
-    }
   };
 
   const cartTotal = cart.reduce((sum, i) => sum + i.price * i.qty, 0);
